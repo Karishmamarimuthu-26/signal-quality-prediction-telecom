@@ -18,16 +18,14 @@ statistical relationships (RSRP ≈ f(distance), RSSI = RSRP + interference,
 SINR = RSRP − interference, RSRQ = RSRP − RSSI, etc.), with Gaussian noise
 and 2% missingness injected per column to mimic real drive-test logs.
 
-*Why synthetic:* labeled operator KPI datasets with signal-quality ground
+*Note on the data source* labeled operator KPI datasets with signal-quality ground
 truth are proprietary and not freely redistributable. Public academic
 alternatives exist (e.g. SRFG's **LTE-4G-HIGHWAY-DRIVE-TESTS-SALZBURG**
 dataset, or the **Vienna 4G/5G Drive-Test Dataset**, both real drive-test
 corpora from Austria) but require registration/licensing, so this project
 reproduces the same feature relationships to keep the full pipeline
 runnable and reproducible by anyone who clones the repo.
-**Be upfront about this if asked** — it's a legitimate and common approach
-for portfolio projects, and it means every number in this README is real,
-not invented.
+
 
 ## 3. Features
 | Feature | Definition |
@@ -46,7 +44,7 @@ not invented.
 Gradient-boosted decision tree ensemble. Trained both as a classifier
 (quality band) and a regressor (continuous score) — see `src/train_model.py`.
 
-**Why XGBoost over alternatives — with numbers from this run** (`src/compare_models.py`):
+**XGBoost over alternatives — with numbers from this run** (`src/compare_models.py`):
 
 | Model | Accuracy | F1 (macro) |
 |---|---|---|
@@ -69,7 +67,7 @@ Gradient-boosted decision tree ensemble. Trained both as a classifier
   interpretable, per-feature importance a telecom analyst needs to explain
   *why* quality dropped — not just predict that it did.
 
-## 5. Feature Importance (the answer to "top 3 features")
+## 5. Feature Importance
 From the trained XGBoost **classifier** (`results/metrics.json`,
 `results/feature_importance.png`):
 
@@ -87,11 +85,7 @@ From the trained XGBoost **classifier** (`results/metrics.json`,
 *(Regressor importances are similar but even more concentrated on SINR —
 75.8% — since the continuous score responds more smoothly to it.)*
 
-**Takeaway to say out loud:** "SINR alone explains over half the variance
-in predicted quality, which lines up with telecom theory — it's the KPI
-that already combines signal strength and interference into one number.
-That told me interference management and cell-edge SINR, not just raw
-coverage (RSRP), is the leverage point for improving perceived quality."
+
 
 ## 6. Evaluation
 Two framings, both evaluated on a held-out 20% test set:
@@ -110,16 +104,7 @@ Two framings, both evaluated on a held-out 20% test set:
 
 Full classification report + confusion matrix: `results/metrics.json`.
 
-## 7. Connection to Nokia / network optimization
-This started as an extension of BSNL internship exposure — working
-adjacent to live network operations data — into a structured ML pipeline:
-raw KPI logs → cleaning → feature engineering → a model that doesn't just
-predict "quality is dropping" but *explains why* via feature importance.
-That explainability piece is what maps onto Nokia's network optimization
-and analytics domain: a NOC engineer doesn't just want a quality score,
-they want to know whether to look at interference mitigation, capacity
-(load), or coverage (RSRP) — which is exactly what feature importance
-ranks for them here.
+
 
 ## Pipeline (end to end)
 ```
