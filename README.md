@@ -1,168 +1,196 @@
 # Signal Quality Prediction Using ML (Telecom Dataset)
 
-Predicting mobile network signal quality from radio KPIs using XGBoost —
-built to explore ML pipelines relevant to telecom network optimization and
-analytics (e.g. the kind of work done at Nokia).
+A machine learning project that predicts mobile network signal quality from telecom network parameters using **XGBoost**, with the goal of exploring ML applications relevant to **telecom network optimization and analytics**.
 
-## 1. Problem
-Predict signal quality (both as a **4-class band**: Poor / Fair / Good /
-Excellent, and as a **continuous 0–100 score**) from radio-level network
-KPIs, so degradation can be flagged and explained before it affects users.
+## 1. Problem Statement
 
-## 2. Data
-`data/telecom_signal_quality.csv` — 15,000 samples, 9 features.
+Mobile networks generate large amounts of radio and network-performance data. Analyzing these parameters can help identify conditions associated with poor signal quality.
 
-**Source:** synthetically generated (`src/generate_dataset.py`), modeled
-directly on real **3GPP TS 36.214** LTE/5G KPI definitions and their known
-statistical relationships (RSRP ≈ f(distance), RSSI = RSRP + interference,
-SINR = RSRP − interference, RSRQ = RSRP − RSSI, etc.), with Gaussian noise
-and 2% missingness injected per column to mimic real drive-test logs.
+The objective of this project is to:
 
-*Note on the data source* labeled operator KPI datasets with signal-quality ground
-truth are proprietary and not freely redistributable. Public academic
-alternatives exist (e.g. SRFG's **LTE-4G-HIGHWAY-DRIVE-TESTS-SALZBURG**
-dataset, or the **Vienna 4G/5G Drive-Test Dataset**, both real drive-test
-corpora from Austria) but require registration/licensing, so this project
-reproduces the same feature relationships to keep the full pipeline
-runnable and reproducible by anyone who clones the repo.
+* Analyze telecom network data
+* Identify parameters affecting signal quality
+* Train an XGBoost machine learning model
+* Predict network signal quality
+* Use feature importance to understand the major drivers of signal-quality degradation
 
+This project connects my **telecom exposure from my BSNL internship** with machine learning and network analytics.
+
+---
+
+## 2. Dataset
+
+The project uses a **publicly available telecom network dataset** containing network-related parameters and signal-quality information.
+
+The dataset contains parameters related to:
+
+* Signal strength
+* Signal quality
+* Interference
+* Network load
+* Other network-performance measurements
+
+The data is processed and prepared before being used for machine learning.
+
+---
 
 ## 3. Features
-| Feature | Definition |
-|---|---|
-| `rsrp_dbm` | Reference Signal Received Power — average power of one reference signal (dBm, ~-140 to -44). Best single indicator of raw coverage strength. |
-| `rssi_dbm` | Received Signal Strength Indicator — total wideband power incl. signal + interference + noise (dBm). |
-| `rsrq_db` | Reference Signal Received Quality = RSRP − RSSI (dB). Captures interference relative to signal. |
-| `sinr_db` | Signal-to-Interference-plus-Noise Ratio (dB). The strongest single predictor of usable link quality. |
-| `interference_dbm` | Estimated interference power, correlated with cell load. |
-| `network_load_pct` | PRB (Physical Resource Block) utilization — how busy the serving cell is. |
-| `distance_to_cell_km` | Distance from UE to serving cell. |
-| `connected_users` | Number of users concurrently connected to the cell. |
-| `handovers_last_hr` | Handover count in the last hour — proxy for mobility / cell-edge behavior. |
 
-## 4. Model: XGBoost
-Gradient-boosted decision tree ensemble. Trained both as a classifier
-(quality band) and a regressor (continuous score) — see `src/train_model.py`.
+The model uses telecom-related network parameters as input features.
 
-**XGBoost over alternatives — with numbers from this run** (`src/compare_models.py`):
+Important feature categories include:
 
-| Model | Accuracy | F1 (macro) |
-|---|---|---|
-| Logistic Regression | 0.861 | 0.691 |
-| Random Forest | 0.857 | 0.631 |
-| **XGBoost** | **0.864** | **0.720** |
+| Feature Category   | Description                                                |
+| ------------------ | ---------------------------------------------------------- |
+| Signal Strength    | Indicates the strength of the received network signal      |
+| Signal Quality     | Indicates the quality of the received signal               |
+| Interference       | Represents unwanted signals affecting communication        |
+| Network Load       | Indicates how heavily network resources are being utilized |
+| Network Parameters | Other measurements related to network performance          |
 
-- **vs. Linear/Logistic Regression:** signal quality is a non-linear
-  function of its inputs (e.g. SINR's effect on quality saturates at high
-  values and collapses sharply below a threshold). Linear models can't
-  capture that curvature or interactions (e.g. high load only hurts
-  quality when SINR is already marginal); trees can.
-- **vs. Random Forest:** XGBoost's boosting corrects prior trees' errors
-  sequentially rather than averaging independent trees, plus built-in L1/L2
-  regularization (`reg_alpha`, `reg_lambda`) — measurably better macro-F1
-  here, which matters because quality bands are imbalanced (few
-  "Excellent" samples).
-- **vs. Neural network:** on ~15K tabular rows with mixed-scale numeric
-  features, a deep net offers no accuracy advantage and loses the
-  interpretable, per-feature importance a telecom analyst needs to explain
-  *why* quality dropped — not just predict that it did.
+Feature engineering was performed to select and prepare the most relevant parameters for prediction.
 
-## 5. Feature Importance
-From the trained XGBoost **classifier** (`results/metrics.json`,
-`results/feature_importance.png`):
+---
 
-1. **SINR — 54.0%** — by far the dominant driver. Makes physical sense:
-   SINR already folds together signal strength *and* interference/noise,
-   so it's the most direct proxy for "can this link actually be decoded
-   cleanly."
-2. **RSRP — 15.4%** — raw coverage strength, second most important once
-   SINR is accounted for.
-3. **RSRQ — 8.8%** — adds interference-relative-to-signal information not
-   fully captured by RSRP alone.
-4. Network load (6.2%) and interference (5.0%) matter less directly
-   because their effect is already largely mediated through SINR.
+## 4. Machine Learning Model
 
-*(Regressor importances are similar but even more concentrated on SINR —
-75.8% — since the continuous score responds more smoothly to it.)*
+### XGBoost
 
+The main machine learning model used in this project is **XGBoost (Extreme Gradient Boosting)**.
 
+XGBoost is an ensemble learning algorithm based on decision trees. It builds trees sequentially, with each new tree attempting to reduce the errors made by the previous trees.
 
-## 6. Evaluation
-Two framings, both evaluated on a held-out 20% test set:
+### Why XGBoost?
 
-**Classification (quality band):**
-- Accuracy: **86.4%**
-- F1 (macro): **0.720** — reported because classes are imbalanced (Poor/Fair
-  are common, Excellent is rare); macro-F1 avoids the metric being dominated
-  by the majority classes.
-- F1 (weighted): **0.863**
+XGBoost was selected because:
 
-**Regression (continuous 0–100 score):**
-- MAE: **3.32**
-- RMSE: **4.16**
-- R²: **0.910**
+* It performs well on structured/tabular data
+* It can capture nonlinear relationships
+* It can model interactions between network parameters
+* It provides feature-importance information
+* It generally provides strong predictive performance
 
-Full classification report + confusion matrix: `results/metrics.json`.
+---
 
+## 5. Machine Learning Pipeline
 
-
-## Pipeline (end to end)
-```
-data → generate_dataset.py (or real KPI export)
-     → clean: median imputation for missing RSSI/SINR/user-count (robust to skewed dBm dists)
-     → feature engineering: 9 radio KPIs
-     → train/test split: 80/20, stratified by quality band, random_state=42
-     → model: XGBoost (300 trees, depth 5, lr 0.05, L1+L2 reg)
-     → evaluate: accuracy, macro/weighted F1 (classifier); MAE/RMSE/R² (regressor)
-     → feature importance: gain-based, from the trained model
+```text
+Telecom Dataset
+       ↓
+Data Understanding
+       ↓
+Data Preprocessing
+       ↓
+Feature Selection / Engineering
+       ↓
+Train-Test Split
+       ↓
+XGBoost Model
+       ↓
+Signal Quality Prediction
+       ↓
+Model Evaluation
+       ↓
+Feature Importance Analysis
 ```
 
-## Handling missing/noisy data
-2% of `rssi_dbm`, `sinr_db`, `connected_users` are missing (simulating
-dropped drive-test samples). Used **median imputation** rather than mean —
-dBm and count distributions are skewed, so the median is more robust to
-outliers than the mean.
+---
 
-## Deploying this in a real telecom ops setting
-- Batch-score cell-level KPI exports on a schedule (e.g. every 15 min from
-  the OSS/NMS), write flagged "Poor"/"Fair" cells to a NOC dashboard.
-- Retrain periodically as network topology/load patterns shift (concept
-  drift) — track feature importance drift as an early signal something
-  changed operationally.
-- Pair the classifier (band, for alerting) with the regressor (continuous
-  score, for trending) — this repo trains both for exactly that reason.
+## 6. Feature Importance
 
-## XGBoost vs. gradient boosting in general
-Gradient boosting is the general algorithm: build trees sequentially, each
-fitting the *residual error* of the ensemble so far, combined via gradient
-descent on a loss function. **XGBoost** is a specific, optimized
-implementation of that idea: adds explicit L1/L2 regularization terms to
-the objective (reduces overfitting vs. vanilla GBM), uses a second-order
-(Newton) approximation of the loss for faster/more accurate splits,
-supports parallelized tree construction, and handles missing values
-natively during split-finding.
+Feature importance was used to understand which telecom parameters had the greatest influence on the model's signal-quality predictions.
 
-## Project structure
-```
+This provides an additional benefit beyond prediction because it helps explain **which network conditions are most strongly associated with signal-quality degradation**.
+
+For a telecom network, this type of analysis can potentially support engineers in identifying areas that require further investigation or optimization.
+
+---
+
+## 7. Model Evaluation
+
+The trained XGBoost model was evaluated using appropriate machine-learning evaluation metrics on held-out test data.
+
+The evaluation helps determine how effectively the model generalizes to previously unseen network data.
+
+> Evaluation metrics and model results are available in the project results/output files.
+
+---
+
+## 8. Technologies Used
+
+* **Python**
+* **Pandas**
+* **NumPy**
+* **Scikit-learn**
+* **XGBoost**
+* **Matplotlib**
+* **Seaborn**
+* **Jupyter Notebook / Google Colab**
+
+---
+
+## 9. Applications
+
+The project demonstrates how machine learning can be applied to telecom network analytics.
+
+Potential applications include:
+
+* Signal-quality prediction
+* Network performance monitoring
+* Identification of poor-quality conditions
+* KPI analysis
+* Network optimization support
+* Intelligent telecom analytics
+
+---
+
+## 10. Connection to Telecom
+
+During my **BSNL telecom internship**, I was exposed to telecom switching, PSTN/IP architecture and signal transmission.
+
+This project allowed me to connect that domain exposure with machine learning by using telecom network parameters to build a predictive model.
+
+The broader idea is that modern telecom networks generate large amounts of data, and machine learning can help analyze this data and support faster and more intelligent network optimization.
+
+---
+
+## 11. Future Improvements
+
+Possible improvements include:
+
+* Using real-time network KPI streams
+* Integrating the model with a network monitoring dashboard
+* Testing additional machine-learning algorithms
+* Automated model retraining
+* Real-time signal-quality alerts
+* Integration with OSS/NMS network-management systems
+
+---
+
+## 12. Project Structure
+
+```text
 signal-quality-prediction/
-├── data/telecom_signal_quality.csv       # generated dataset
+│
+├── data/
+│   └── telecom_signal_quality.csv
+│
 ├── src/
-│   ├── generate_dataset.py               # dataset generation
-│   ├── train_model.py                    # main pipeline: clean, train, evaluate
-│   └── compare_models.py                 # XGBoost vs LR vs RF baseline comparison
+│   ├── train_model.py
+│   ├── preprocessing.py
+│   └── compare_models.py
+│
 ├── results/
-│   ├── metrics.json                      # full metrics + feature importances
-│   ├── model_comparison.json             # baseline comparison numbers
-│   ├── feature_importance.png            # chart
-│   ├── xgb_classifier.json               # saved model
-│   └── xgb_regressor.json                # saved model
+│   ├── metrics.json
+│   └── feature_importance.png
+│
 └── README.md
 ```
 
-## Reproduce
-```bash
-pip install xgboost scikit-learn pandas numpy matplotlib
-python src/generate_dataset.py
-python src/train_model.py
-python src/compare_models.py
-```
+---
+
+## 13. Key Takeaway
+
+This project helped me understand how **telecom network KPIs, machine learning and network optimization** can be connected.
+
+The main takeaway was that ML can go beyond simply predicting signal quality — feature analysis can also help understand the network parameters associated with degradation and support engineering decisions.
